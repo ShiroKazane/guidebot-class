@@ -4,7 +4,7 @@
 if (Number(process.version.slice(1).split(".")[0]) < 8) throw new Error("Node 8.0.0 or higher is required. Update Node on your system.");
 
 // Load up the discord.js library
-const Discord = require("discord.js");
+const { Client, Collection } = require("discord.js");
 // We also load the rest of the things we need in this file:
 const { promisify } = require("util");
 const readdir = promisify(require("fs").readdir);
@@ -12,7 +12,7 @@ const Enmap = require("enmap");
 const klaw = require("klaw");
 const path = require("path");
 
-class GuideBot extends Discord.Client {
+class GuideBot extends Client {
   constructor(options) {
     super(options);
 
@@ -23,13 +23,13 @@ class GuideBot extends Discord.Client {
 
     // Aliases and commands are put in collections where they can be read from,
     // catalogued, listed, etc.
-    this.commands = new Discord.Collection();
-    this.aliases = new Discord.Collection();
+    this.commands = new Collection();
+    this.aliases = new Collection();
 
     // Now we integrate the use of Evie's awesome Enhanced Map module, which
     // essentially saves a collection to disk. This is great for per-server configs,
     // and makes things extremely easy for this purpose.
-    this.settings = new Enmap({ name: "settings" });
+    this.settings = new Enmap({ name: "settings", cloneLevel: "deep", fetchAll: false, autoFetch: true });
 
     //requiring the Logger class for easy console logging
     this.logger = require("./util/Logger");
@@ -105,6 +105,27 @@ class GuideBot extends Discord.Client {
     return false;
   }
 
+  /*
+  MESSAGE CLEAN FUNCTION
+  "Clean" removes @everyone pings, as well as tokens, and makes code blocks
+  escaped so they're shown more easily. As a bonus it resolves promises
+  and stringifies objects!
+  This is mostly only used by the Eval and Exec commands.
+  */
+  async clean(text) {
+    if (text && text.constructor.name == "Promise")
+      text = await text;
+    if (typeof text !== "string")
+      text = require("util").inspect(text, { depth: 1 });
+
+    text = text
+      .replace(/`/g, "`" + String.fromCharCode(8203))
+      .replace(/@/g, "@" + String.fromCharCode(8203))
+      .replace(this.token, "mfa.VkO_2G4Qv3T--NO--lWetW_tjND--TOKEN--QFTm6YGtzq9PH--4U--tG0");
+
+    return text;
+  }
+
   /* SETTINGS FUNCTIONS
   These functions are used by any and all location in the bot that wants to either
   read the current *complete* guild settings (default + overrides, merged) or that
@@ -113,14 +134,11 @@ class GuideBot extends Discord.Client {
 
   // getSettings merges the client defaults with the guild settings. guild settings in
   // enmap should only have *unique* overrides that are different from defaults.
-  getSettings(guild) {
-    const defaults = client.config.defaultSettings || {};
-    const guildData = client.settings.get(guild.id) || {};
-    const returnObject = {};
-    Object.keys(defaults).forEach((key) => {
-      returnObject[key] = guildData[key] ? guildData[key] : defaults[key];
-    });
-    return returnObject;
+  getSettings(guildid) {
+    return {
+      ...(client.config.defaultSettings || {}),
+      ...(client.settings.get(guildid) || {})
+    };
   }
 
   // writeSettings overrides, or adds, any configuration item that is different
@@ -140,40 +158,15 @@ class GuideBot extends Discord.Client {
   }
 
   /*
-  MESSAGE CLEAN FUNCTION
-
-  "Clean" removes @everyone pings, as well as tokens, and makes code blocks
-  escaped so they're shown more easily. As a bonus it resolves promises
-  and stringifies objects!
-  This is mostly only used by the Eval and Exec commands.
-  */
-  async clean(text) {
-    if (text && text.constructor.name == "Promise")
-      text = await text;
-    if (typeof evaled !== "string")
-      text = require("util").inspect(text, {depth: 0});
-
-    text = text
-      .replace(/`/g, "`" + String.fromCharCode(8203))
-      .replace(/@/g, "@" + String.fromCharCode(8203))
-      .replace(this.token, "mfa.VkO_2G4Qv3T--NO--lWetW_tjND--TOKEN--QFTm6YGtzq9PH--4U--tG0");
-
-    return text;
-  }
-
-  /*
   SINGLE-LINE AWAITMESSAGE
-
   A simple way to grab a single reply, from the user that initiated
   the command. Useful to get "precisions" on certain things...
-
   USAGE
-
   const response = await client.awaitReply(msg, "Favourite Color?");
   msg.reply(`Oh, I really love ${response} too!`);
   */
   async awaitReply(msg, question, limit = 60000) {
-    const filter = m=>m.author.id = msg.author.id;
+    const filter = m => m.author.id === msg.author.id;
     await msg.channel.send(question);
     try {
       const collected = await msg.channel.awaitMessages(filter, { max: 1, time: limit, errors: ["time"] });
@@ -181,7 +174,7 @@ class GuideBot extends Discord.Client {
     } catch (e) {
       return false;
     }
-  };
+  }
 }
 
 // This is your client. Some people call it `bot`, some people call it `self`,
@@ -208,6 +201,7 @@ const init = async () => {
   client.logger.log(`Loading a total of ${evtFiles.length} events.`, "log");
   evtFiles.forEach(file => {
     const eventName = file.split(".")[0];
+    client.logger.log(`Loading Event: ${eventName}`);
     const event = new (require(`./events/${file}`))(client);
     // This line is awesome by the way. Just sayin'.
     client.on(eventName, (...args) => event.run(...args));
@@ -229,17 +223,16 @@ const init = async () => {
 init();
 
 client.on("disconnect", () => client.logger.warn("Bot is disconnecting..."))
-  .on("reconnect", () => client.logger.log("Bot reconnecting...", "log"))
+  .on("reconnecting", () => client.logger.log("Bot reconnecting...", "log"))
   .on("error", e => client.logger.error(e))
   .on("warn", info => client.logger.warn(info));
-
 
 /* MISCELANEOUS NON-CRITICAL FUNCTIONS */
 
 // EXTENDING NATIVE TYPES IS BAD PRACTICE. Why? Because if JavaScript adds this
 // later, this conflicts with native code. Also, if some other lib you use does
-// this, a conflict also occurs. KNOWING THIS however, the following 2 methods
-// are, we feel, very useful in code. 
+// this, a conflict also occurs. KNOWING THIS however, the following methods
+// are, we feel, very useful in code. So let's just Carpe Diem.
 
 // <String>.toPropercase() returns a proper-cased string such as: 
 // "Mary had a little lamb".toProperCase() returns "Mary Had A Little Lamb"

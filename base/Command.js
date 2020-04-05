@@ -1,4 +1,5 @@
 class Command {
+
   constructor(client, {
     name = null,
     description = "No description provided.",

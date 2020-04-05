@@ -1,4 +1,4 @@
-// This event executes when a new guild (server) is joined.
+// This event executes when a guild (server) is joined.
 
 module.exports = class {
   constructor(client) {
@@ -6,8 +6,7 @@ module.exports = class {
   }
 
   async run(guild) {
-
-    this.client.user.setPresence({game: {name: `${this.client.settings.get("default").prefix}help | ${this.client.guilds.size} Servers`, type:0}});
+    this.client.user.setActivity(`for @${this.client.user.username} help | ${this.client.guilds.size} Servers`, { type: "WATCHING" });
     this.client.logger.log(`New guild has been joined: ${guild.name} (${guild.id}) with ${guild.memberCount - 1} members`);
   }
 };

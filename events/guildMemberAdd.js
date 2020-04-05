@@ -7,7 +7,7 @@ module.exports = class {
 
   async run(member) {
   // Load the guild's settings
-    const settings = this.client.getSettings(member.guild);
+    const settings = this.client.getSettings(member.guild.id);
   
     // If welcome is off, don't proceed (don't welcome the user)
     if (settings.welcomeEnabled !== "true") return;

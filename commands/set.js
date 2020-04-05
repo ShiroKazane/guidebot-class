@@ -12,7 +12,7 @@
 // const [action, key, ...value] = args;
 const Command = require("../base/Command.js");
 
-class Set extends Command {
+class SetCMD extends Command {
   constructor(client) {
     super(client, {
       name: "set",
@@ -93,4 +93,4 @@ class Set extends Command {
   }
 }
 
-module.exports = Set;
+module.exports = SetCMD;
